@@ -1340,10 +1340,13 @@ ShellRoot {
         }
         onStatusChanged: {
           if (status === Loader.Error) {
-            // Loader.errorString() reflects the source-load failure even when
-            // sourceComponent is null. Surface both so the user sees something
-            // actionable instead of a panel that silently refuses to open.
-            var detail = errorString && errorString() ? errorString() : ""
+            // Loader has no errorString(), so referencing it bare throws a
+            // ReferenceError that aborts this handler: no warning is logged and
+            // hide() below never runs. Probe it defensively and fall back to the
+            // component, so the user sees something actionable instead of a
+            // panel that silently refuses to open.
+            var detail = typeof errorString === "function" && errorString()
+              ? errorString() : ""
             if (!detail && sourceComponent) detail = sourceComponent.errorString()
             console.warn("panel plugin " + panelEntry.pluginId + " failed to load:", detail)
             shell.hide(panelEntry.pluginId)
