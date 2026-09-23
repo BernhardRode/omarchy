@@ -790,8 +790,14 @@ ShellRoot {
       var expectedProfile = descriptor
         ? shell.pluginShellCapabilityProfile(manifest, descriptor.allowOwnService, barCapabilities) : ""
       var active = descriptor && manifest && shell.pluginRegistry.isEnabled(descriptor.pluginId)
-      if (!active || descriptor.profile !== expectedProfile)
+      if (!active || descriptor.profile !== expectedProfile) {
+        var revokedId = descriptor ? String(descriptor.pluginId || "") : ""
         shell.revokePluginShellApi(shellKey)
+        // Revoking destroys the api objects. A kept panel instance holds them
+        // from its one-time onLoaded and would silently be left with null, so
+        // hand it fresh ones while the plugin is still installed.
+        if (revokedId) shell.refreshPanelPluginApis(revokedId)
+      }
     }
 
     var registryNext = ({})
@@ -1222,6 +1228,23 @@ ShellRoot {
     next[pluginId] = loader
     panelLoaders = next
     deliverIfLoaded(pluginId)
+  }
+
+  // Re-deliver the host apis to an already loaded panel, overlay or menu
+  // plugin. Its Loader assigns them once in onLoaded, so anything that revokes
+  // and recreates them afterwards has to push the replacements itself; this
+  // mirrors the kept-service path in ensureServices().
+  function refreshPanelPluginApis(pluginId) {
+    var id = String(pluginId || "")
+    var loader = panelLoaders[id]
+    var item = loader ? loader.item : null
+    if (!item) return
+    var manifest = shell.pluginRegistry.installedPlugins[id]
+    if (!manifest) return
+    if ("shell" in item) item.shell = shell.pluginShellFor(manifest)
+    if ("manifest" in item) item.manifest = shell.publicPluginManifest(manifest)
+    if ("barWidgetRegistry" in item) item.barWidgetRegistry = shell.pluginBarWidgetRegistryFor(manifest)
+    if ("pluginRegistry" in item) item.pluginRegistry = shell.pluginRegistryFor(manifest)
   }
 
   function unregisterPanelLoader(pluginId) {
